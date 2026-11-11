@@ -48,9 +48,16 @@ class GeminiClientTest {
 
   @Test
   void rejectsProviderErrorsWithoutLeakingResponse() {
-    when(response.statusCode()).thenReturn(429);
-    var error = assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
-    assertEquals("GEMINI_UNAVAILABLE", error.getReason());
+    var cases = Map.of(401, "GEMINI_CREDENTIALS_REJECTED", 403, "GEMINI_CREDENTIALS_REJECTED",
+        404, "GEMINI_MODEL_UNAVAILABLE", 429, "GEMINI_RATE_LIMITED",
+        400, "GEMINI_REQUEST_REJECTED", 503, "GEMINI_UNAVAILABLE");
+    when(response.body()).thenReturn("private provider details and credentials");
+    cases.forEach((status, code) -> {
+      when(response.statusCode()).thenReturn(status);
+      var error = assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
+      assertEquals(code, error.getReason());
+      assertFalse(error.getMessage().contains("private provider"));
+    });
   }
 
   @Test

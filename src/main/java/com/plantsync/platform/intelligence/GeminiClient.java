@@ -62,8 +62,19 @@ public class GeminiClient {
               .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
               .build();
       var response = http.send(request, HttpResponse.BodyHandlers.ofString());
-      if (response.statusCode() != 200)
-        throw new ResponseStatusException(BAD_GATEWAY, "GEMINI_UNAVAILABLE");
+      if (response.statusCode() != 200) {
+        // Return stable diagnostic codes, never the provider body or API key.
+        String code = switch (response.statusCode()) {
+          case 401, 403 -> "GEMINI_CREDENTIALS_REJECTED";
+          case 404 -> "GEMINI_MODEL_UNAVAILABLE";
+          case 429 -> "GEMINI_RATE_LIMITED";
+          case 400 -> "GEMINI_REQUEST_REJECTED";
+          default -> "GEMINI_UNAVAILABLE";
+        };
+        org.slf4j.LoggerFactory.getLogger(GeminiClient.class)
+            .warn("Gemini request rejected: upstreamStatus={}, code={}", response.statusCode(), code);
+        throw new ResponseStatusException(BAD_GATEWAY, code);
+      }
       var candidate = json.readTree(response.body()).path("candidates").path(0);
       if (!"STOP".equals(candidate.path("finishReason").asText()))
         throw new ResponseStatusException(BAD_GATEWAY, "GEMINI_INCOMPLETE");

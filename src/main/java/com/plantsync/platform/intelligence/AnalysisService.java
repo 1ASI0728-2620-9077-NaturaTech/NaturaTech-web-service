@@ -186,6 +186,12 @@ public class AnalysisService {
                           Base64.getEncoder().encodeToString(claimed.getImage())))));
       validate(answer);
       output = json.writeValueAsString(answer);
+    } catch (ResponseStatusException e) {
+      var safeCodes = Set.of("GEMINI_NOT_CONFIGURED", "GEMINI_CREDENTIALS_REJECTED",
+          "GEMINI_MODEL_UNAVAILABLE", "GEMINI_RATE_LIMITED", "GEMINI_REQUEST_REJECTED",
+          "GEMINI_UNAVAILABLE", "GEMINI_INCOMPLETE", "GEMINI_INVALID_RESULT", "GEMINI_INTERRUPTED");
+      error = e.getReason() != null && safeCodes.contains(e.getReason())
+          ? e.getReason() : "ANALYSIS_PROVIDER_FAILED";
     } catch (Exception e) {
       error = "ANALYSIS_PROVIDER_FAILED";
     }

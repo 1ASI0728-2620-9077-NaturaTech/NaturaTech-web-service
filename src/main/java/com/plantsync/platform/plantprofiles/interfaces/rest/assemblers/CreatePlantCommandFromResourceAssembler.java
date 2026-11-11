@@ -15,9 +15,9 @@ public class CreatePlantCommandFromResourceAssembler {
         new PlantName(resource.name()),
         resource.species(),
         resource.description(),
-        LocalDate.parse(resource.acquisitionDate()),
+        parseDate(resource.acquisitionDate(), false),
         HumidityLevel.valueOf(resource.humidity().toUpperCase()),
-        LocalDate.parse(resource.nextWateringDate()),
+        parseDate(resource.nextWateringDate(), true),
         resource.imageUrl(),
         resource.notificationsEnabled(),
         resource.temperatureThresholdMin(),
@@ -27,6 +27,16 @@ public class CreatePlantCommandFromResourceAssembler {
         resource.humidityThresholdMax(),
         new ProfileId(resource.profileId())
     );
+  }
+
+  private static LocalDate parseDate(String value, boolean optional) {
+    if (optional && (value == null || value.isBlank())) return null;
+    try {
+      return LocalDate.parse(value);
+    } catch (java.time.DateTimeException | NullPointerException error) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.BAD_REQUEST, "PLANT_DATE_INVALID");
+    }
   }
 
 }
