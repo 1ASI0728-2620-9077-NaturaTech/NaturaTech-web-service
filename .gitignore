@@ -41,5 +41,6 @@ build/
 contracts/node_modules/
 contracts/artifacts/
 __pycache__/
+# Keep deployment handoff documents versioned without publishing unrelated local notes.
 docs/
 

@@ -17,12 +17,12 @@ function New-LocalSecret {
 function Wait-Api([string]$url) {
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
         try {
-            $health = Invoke-RestMethod "$url/actuator/health" -TimeoutSec 3
+            $health = Invoke-RestMethod "$url/actuator/health" -UseBasicParsing -TimeoutSec 3
             if ($health.status -eq 'UP') { return }
-        } catch { }
+        } catch { $lastHealthError = $_.Exception.Message }
         Start-Sleep -Seconds 2
     }
-    throw 'The application did not become healthy.'
+    throw "The application did not become healthy at $url. Last error: $lastHealthError"
 }
 try {
     New-Item -ItemType Directory -Path $directory | Out-Null
@@ -30,7 +30,7 @@ try {
     $jwt = New-LocalSecret
     [IO.File]::WriteAllText($dbEnv, "MYSQL_ROOT_PASSWORD=$password`nMYSQL_DATABASE=plantsync`nMYSQL_USER=plantsync`nMYSQL_PASSWORD=$password`n", $utf8)
     # These credentials are disposable and never printed. No external integration keys loaded.
-    [IO.File]::WriteAllText($apiEnv, "SPRING_PROFILES_ACTIVE=render`nDB_URL=jdbc:mysql://database:3306/plantsync?allowPublicKeyRetrieval=true&useSSL=false&connectionTimeZone=UTC`nDB_USERNAME=plantsync`nDB_PASSWORD=$password`nJWT_SECRET=$jwt`nIOT_ENVIRONMENT=SIMULATED`nREWARDS_ENABLED=false`n", $utf8)
+    [IO.File]::WriteAllText($apiEnv, "SPRING_PROFILES_ACTIVE=render`nDB_URL=jdbc:mysql://database:3306/plantsync?allowPublicKeyRetrieval=true&useSSL=false&connectionTimeZone=UTC`nDB_USERNAME=plantsync`nDB_PASSWORD=$password`nJWT_SECRET=$jwt`nIOT_ENVIRONMENT=SIMULATED`nREWARDS_ENABLED=false`nCORS_ORIGINS=https://plantsync-app.netlify.app`nWALLET_DOMAIN=plantsync-app.netlify.app`n", $utf8)
     docker network create $network | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Could not create test network.' }
     docker run --detach --name $database --network $network --network-alias database --env-file $dbEnv --health-cmd 'mysqladmin ping -h127.0.0.1 --silent' --health-interval 2s --health-retries 60 mysql:8.4 --default-time-zone=+00:00 | Out-Null
@@ -47,6 +47,8 @@ try {
     if ($binding -notmatch '^127\.0\.0\.1:\d+$') { throw 'Unexpected test port binding.' }
     $url = "http://$binding"
     Wait-Api $url
+    $preflight = Invoke-WebRequest "$url/api/v1/authentication/sign-in" -UseBasicParsing -Method Options -Headers @{Origin='https://plantsync-app.netlify.app'; 'Access-Control-Request-Method'='POST'; 'Access-Control-Request-Headers'='content-type'}
+    if ($preflight.Headers['Access-Control-Allow-Origin'] -ne 'https://plantsync-app.netlify.app') { throw 'Netlify CORS preflight failed.' }
     $email = "docker-$suffix@example.test"
     $userPassword = New-LocalSecret
     $signup = @{name='Docker smoke'; email=$email; password=$userPassword; subscriptionPlan='BASIC'} | ConvertTo-Json
@@ -61,10 +63,15 @@ try {
     catch { if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 403) { $denied = $true } else { throw } }
     if (-not $denied) { throw 'User accessed global directory.' }
     docker restart $application | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Could not restart application image.' }
+    # Docker may assign a different host port when restarting an ephemeral binding.
+    $binding = docker port $application 10000/tcp
+    if ($binding -notmatch '^127\.0\.0\.1:\d+$') { throw 'Unexpected restarted test port binding.' }
+    $url = "http://$binding"
     Wait-Api $url
     $restored = Invoke-RestMethod "$url/api/v1/me" -Headers $headers
     if ($restored.id -ne $me.id -or $restored.profileId -ne $me.profileId) { throw 'Persistence after restart failed.' }
-    Write-Host 'PASS: Docker render profile, fresh MySQL migration, registration, login, permissions and persistence after restart.'
+    Write-Host 'PASS: Docker render profile, fresh MySQL migration, Netlify CORS, registration, login, permissions and persistence after restart.'
 } finally {
     # Only resources with this execution's unique names are removed.
     $ErrorActionPreference = 'Continue'

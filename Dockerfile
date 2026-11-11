@@ -10,7 +10,10 @@ RUN ./mvnw -B verify
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /workspace/target/platform-0.0.1-SNAPSHOT.jar app.jar
+COPY scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
+# Windows checkouts must remain runnable in the Linux deployment image.
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod 755 /app/docker-entrypoint.sh
 ENV SPRING_PROFILES_ACTIVE=render
 USER 10001:10001
 EXPOSE 10000
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

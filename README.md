@@ -1,5 +1,7 @@
 # PlantSync Backend
 
+Guía vigente para publicar: [salida a Render y Netlify](docs/salida-render-netlify.md).
+
 Configuración vigente: Gemini `gemini-flash-latest`, Rabby Wallet, IoT simulado, Render y Netlify. Consultar [guía de configuración y despliegue](docs/configuracion-y-despliegue.md). La clave Gemini se introduce exclusivamente en `.env.local` (perfil local) o Render Environment. Nunca en frontend ni Git.
 
 API Spring Boot / Java 21 para el frontend Vue de PlantSync. Conserva las funciones anteriores e incorpora análisis con Gemini, propuestas de acciones IoT y medallas en Ethereum Sepolia.
@@ -29,7 +31,7 @@ En el repositorio frontend, ejecutar `npm ci` y `npm run dev`. Vite redirige `/a
 
 Con el servidor local iniciado, `powershell -File scripts/smoke-local.ps1` comprueba registro, login, identidad, perfil y denegación del directorio global; crea una cuenta descartable local y no imprime credenciales.
 
-Verificación del 11 de noviembre: **86 pruebas backend aprobadas sin omisiones**, incluidas MySQL 8.4, y **85,83 % de cobertura de instrucciones**. `verify` pasa con el umbral original del 80 %. La imagen `plantsync-api:local` se construyó con ese mismo control. Esto habilita la preparación de staging, no certifica integraciones externas ni producción.
+Verificación del 11 de noviembre: **90 pruebas backend aprobadas sin omisiones**, incluidas MySQL 8.4, y **85,83 % de cobertura de instrucciones**. `verify` pasa con el umbral original del 80 %. La imagen `plantsync-api:local` se construyó con ese mismo control. Esto habilita la preparación de staging, no certifica integraciones externas ni producción.
 
 El perfil `render` ejecuta las migraciones Flyway V1/V2 sobre una base nueva y valida el esquema con Hibernate. Consultar [migraciones y pruebas](docs/migraciones-mysql.md) antes de conectar una base existente. `scripts/smoke-docker.ps1` verifica el contenedor y la persistencia con MySQL desechable sin cargar secretos externos.
 

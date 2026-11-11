@@ -16,13 +16,13 @@ services:
       - key: DB_PASSWORD
         sync: false
       - key: CORS_ORIGINS
-        sync: false
+        value: https://plantsync-app.netlify.app
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        sync: false
+        value: gemini-flash-latest
       - key: WALLET_DOMAIN
-        sync: false
+        value: plantsync-app.netlify.app
       - key: IOT_ENVIRONMENT
         value: SIMULATED
       - key: REWARDS_ENABLED
