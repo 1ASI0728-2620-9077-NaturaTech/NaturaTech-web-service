@@ -1,0 +1,13 @@
+services:
+  plantsync-platform:
+    image: plantsync-platform-os:0.0.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8080:8080
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
+      - PSPASSWORD=${PSPASSWORD}
+      - WEATHERAPIKEY=${WEATHERAPIKEY}
+      - EDGE_API_KEY=${EDGE_API_KEY}

@@ -1,0 +1,12 @@
+.git
+.idea
+.vscode
+.env
+.env.*
+.data
+target
+contracts
+docs
+scripts
+simulator
+*.log

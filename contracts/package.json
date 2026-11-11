@@ -1,0 +1,1 @@
+{"private":true,"scripts":{"build":"solcjs --bin --abi --base-path . --include-path node_modules -o artifacts GreenBadge.sol"},"devDependencies":{"@openzeppelin/contracts":"5.0.2","solc":"0.8.38"},"overrides":{"tmp":"0.2.7"}}
