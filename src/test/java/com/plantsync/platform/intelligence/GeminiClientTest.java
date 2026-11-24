@@ -24,7 +24,7 @@ class GeminiClientTest {
     when(http.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
         .thenReturn(response);
     client =
-        new GeminiClient(new ObjectMapper(), "test-only-placeholder", "gemini-flash-latest", http);
+        new GeminiClient(new ObjectMapper(), "test-only-placeholder", "gemini-flash-latest", http, millis -> {});
     when(response.statusCode()).thenReturn(200);
   }
 
@@ -71,6 +71,39 @@ class GeminiClientTest {
     }
     when(response.body()).thenReturn("not-json");
     assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
+  }
+
+  @Test
+  void retriesTemporaryOverloadAndRecovers() throws Exception {
+    when(response.statusCode()).thenReturn(503, 503, 200);
+    when(response.body()).thenReturn("{\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":\"{\\\"reply\\\":\\\"Hola\\\"}\"}]}}]}");
+    var delays = new ArrayList<Long>();
+    client = new GeminiClient(new ObjectMapper(), "key", "model", http, delays::add);
+    assertEquals("Hola", client.generate("x", List.of()).path("reply").asText());
+    verify(http, times(3)).send(any(), any());
+    assertEquals(2, delays.size());
+    assertTrue(delays.get(0) >= 1000 && delays.get(0) < 1250);
+    assertTrue(delays.get(1) >= 2000 && delays.get(1) < 2250);
+  }
+
+  @Test
+  void neverRetriesInvalidCredentialsAndBoundsOverloadAttempts() throws Exception {
+    when(response.statusCode()).thenReturn(403);
+    assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
+    verify(http, times(1)).send(any(), any());
+    clearInvocations(http);
+    when(response.statusCode()).thenReturn(503);
+    assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
+    verify(http, times(3)).send(any(), any());
+  }
+
+  @Test
+  void respectsLongRetryAfterWithoutHoldingRequestOpen() throws Exception {
+    when(response.statusCode()).thenReturn(429);
+    when(response.headers()).thenReturn(HttpHeaders.of(Map.of("Retry-After", List.of("60")), (a, b) -> true));
+    var error = assertThrows(ResponseStatusException.class, () -> client.generate("x", List.of()));
+    assertEquals("GEMINI_RATE_LIMITED", error.getReason());
+    verify(http, times(1)).send(any(), any());
   }
 
   @Test

@@ -27,7 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.web3j.crypto.*;
 import org.web3j.utils.Numeric;
 
-@SpringBootTest(properties = "integrations.iot.approved-nodes=NODE-TEST")
+@SpringBootTest(properties = {"integrations.iot.approved-nodes=NODE-TEST",
+    "integrations.iot.node-key-hashes={\"NODE-TEST\":\"fd848ddc3b82d753b9c1aebf43889ba6c4f61b2c52c7a392b13abb407843d4b5\"}"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
@@ -315,6 +316,65 @@ class IntegrationSecurityTest {
         .path("proposal")
         .path("id")
         .asText();
+  }
+
+  @Test
+  void rejectsOverlappingCommands() throws Exception {
+    long plantId = plantWithDevice();
+    String first = proposal(plantId), second = proposal(plantId);
+    mvc.perform(post("/api/v1/actuator-command-proposals/" + first + "/confirm")
+        .header("Authorization", a).header("Idempotency-Key", first))
+        .andExpect(status().isAccepted());
+    mvc.perform(post("/api/v1/actuator-command-proposals/" + second + "/confirm")
+        .header("Authorization", a).header("Idempotency-Key", second))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void wateringIsRejectedWhenMoistureIsAlreadySufficient() throws Exception {
+    long plantId = plantWithDevice();
+    var plant = plants.findById(plantId).orElseThrow();
+    plant.setHumidityThresholdMin(30f);
+    var id = proposal(plantId);
+    proposals.findById(id).orElseThrow().setActuator("WATER_PUMP");
+    mvc.perform(post("/api/v1/actuator-command-proposals/" + id + "/confirm")
+        .header("Authorization", a).header("Idempotency-Key", id))
+        .andExpect(status().isConflict());
+    plant.setHumidityThresholdMin(40f);
+    mvc.perform(post("/api/v1/actuator-command-proposals/" + id + "/confirm")
+        .header("Authorization", a).header("Idempotency-Key", id))
+        .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void telemetryRequiresIndividualNodeSecret() throws Exception {
+    long plantId = plantWithDevice();
+    long nodeId = nodes.findByPlantIdValue(plantId).orElseThrow().getId();
+    String body = json.writeValueAsString(List.of(Map.of("nodeId", nodeId,
+        "humidityPercent", 40, "lightPercent", 30)));
+    long before = readings.count();
+    mvc.perform(post("/api/v1/iot/edge/sensor-readings/batch")
+        .header("X-Edge-Api-Key", "test-only-edge-key")
+        .header("X-Node-Key", "test-device-secret-with-at-least-32-characters")
+        .contentType("application/json").content(json.writeValueAsString(List.of(
+            Map.of("nodeId", nodeId, "humidityPercent", 40),
+            Map.of("nodeId", nodeId, "humidityPercent", 101)))))
+        .andExpect(status().isBadRequest());
+    assertEquals(before, readings.count());
+    mvc.perform(post("/api/v1/iot/edge/sensor-readings/batch")
+        .header("X-Edge-Api-Key", "test-only-edge-key")
+        .header("X-Node-Key", "test-device-secret-with-at-least-32-characters")
+        .contentType("application/json").content(body))
+        .andExpect(status().isCreated());
+    mvc.perform(post("/api/v1/iot/edge/sensor-readings/batch")
+        .header("X-Edge-Api-Key", "test-only-edge-key")
+        .contentType("application/json").content(body))
+        .andExpect(status().isBadRequest());
+    mvc.perform(post("/api/v1/iot/edge/sensor-readings/batch")
+        .header("X-Edge-Api-Key", "test-only-edge-key")
+        .header("X-Node-Key", "incorrect-node-secret-with-32-characters")
+        .contentType("application/json").content(body))
+        .andExpect(status().isForbidden());
   }
 
   @Test

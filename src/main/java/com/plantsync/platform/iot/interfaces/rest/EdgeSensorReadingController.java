@@ -24,14 +24,38 @@ public class EdgeSensorReadingController {
 
   private final SensorReadingCommandService sensorReadingCommandService;
 
-  public EdgeSensorReadingController(SensorReadingCommandService sensorReadingCommandService) {
+  public EdgeSensorReadingController(SensorReadingCommandService sensorReadingCommandService,
+      com.plantsync.platform.iot.infrastructure.persistence.jpa.repositories.IotNodeRepository nodes,
+      com.plantsync.platform.iot.security.NodeCredentials credentials,
+      jakarta.validation.Validator validator) {
+    this.validator = validator;
+    this.nodes = nodes;
+    this.credentials = credentials;
     this.sensorReadingCommandService = sensorReadingCommandService;
   }
 
+  private final com.plantsync.platform.iot.infrastructure.persistence.jpa.repositories.IotNodeRepository nodes;
+  private final com.plantsync.platform.iot.security.NodeCredentials credentials;
+  private final jakarta.validation.Validator validator;
+
   @PostMapping(value = "/batch", consumes = APPLICATION_JSON_VALUE)
   @Operation(summary = "Ingest sensor readings in batch from the Edge Service")
+  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<BatchSensorReadingResponseResource> createReadingsBatch(
-      @Valid @RequestBody List<CreateReadingResource> resources) {
+      @org.springframework.web.bind.annotation.RequestHeader("X-Node-Key") String key,
+      @RequestBody List<@Valid CreateReadingResource> resources) {
+    if (resources == null || resources.isEmpty() || resources.size() > 100)
+      throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "BATCH_SIZE_INVALID");
+    for (var resource : resources) {
+      if (resource == null || !validator.validate(resource).isEmpty())
+        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "READING_INVALID");
+    }
+    var nodeIds = resources.stream().map(CreateReadingResource::nodeId).distinct().toList();
+    if (nodeIds.size() != 1 || nodeIds.get(0) == null)
+      throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "SINGLE_NODE_REQUIRED");
+    var node = nodes.findById(nodeIds.get(0)).orElseThrow(() ->
+        new org.springframework.web.server.ResponseStatusException(HttpStatus.NOT_FOUND, "NODE_NOT_FOUND"));
+    credentials.verify(node.getNodeCode(), key);
     var readingIds = resources.stream()
         .map(CreateReadingCommandFromResourceAssembler::toCommandFromResource)
         .map(sensorReadingCommandService::handle)

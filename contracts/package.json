@@ -1,1 +1,18 @@
-{"private":true,"scripts":{"build":"solcjs --bin --abi --base-path . --include-path node_modules -o artifacts GreenBadge.sol"},"devDependencies":{"@openzeppelin/contracts":"5.0.2","solc":"0.8.38"},"overrides":{"tmp":"0.2.7"}}
+{
+  "private": true,
+  "scripts": {
+    "build": "node scripts/compile.cjs",
+    "test": "node --test test/*.test.cjs",
+    "sepolia:init": "node scripts/sepolia.cjs init",
+    "sepolia:check": "node scripts/sepolia.cjs check",
+    "sepolia:deploy": "node scripts/sepolia.cjs deploy"
+  },
+  "devDependencies": {
+    "@openzeppelin/contracts": "5.0.2",
+    "ethers": "6.17.0",
+    "solc": "0.8.38"
+  },
+  "overrides": {
+    "tmp": "0.2.7"
+  }
+}

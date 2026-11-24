@@ -43,4 +43,7 @@ contracts/artifacts/
 __pycache__/
 
 docs/
-
+IMPLEMENTATION_PLAN.md
+PRESENTATION_CHECKLIST.md
+VERIFICATION.md
+contracts/README.md

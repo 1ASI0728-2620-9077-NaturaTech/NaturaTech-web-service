@@ -26,6 +26,7 @@ public class AgentService {
   private final EntityManager em;
   private final ObjectMapper json;
   private final AiQuotaService quota;
+  private final com.plantsync.platform.plantprofiles.infrastructure.persistence.jpa.repositories.PlantRepository plants;
 
   @Value("${integrations.iot.approved-nodes:}")
   private String approvedNodes;
@@ -87,6 +88,7 @@ public class AgentService {
                           + history
                           + "\nPlanta seleccionada: "
                           + plantId
+                          + "\nContexto verificado: " + plantContext(plantId)
                           + "\nMensaje: "
                           + content)));
       var reply = result.path("reply").asText();
@@ -133,6 +135,23 @@ public class AgentService {
     } catch (Exception e) {
       throw new ResponseStatusException(BAD_GATEWAY, "AGENT_INVALID_RESULT");
     }
+  }
+
+  private String plantContext(Long plantId) throws Exception {
+    if (plantId == null) return "Sin planta seleccionada";
+    var plant = plants.findById(plantId).orElseThrow();
+    var context = new LinkedHashMap<String, Object>();
+    context.put("species", plant.getSpecies());
+    context.put("humidityMin", plant.getHumidityThresholdMin());
+    context.put("humidityMax", plant.getHumidityThresholdMax());
+    context.put("lightMin", plant.getLightThresholdMin());
+    nodes.findByPlantIdValue(plantId).ifPresent(node ->
+        readings.findTopByNodeIdOrderByTimestampDesc(node.getId()).ifPresent(reading -> {
+          context.put("humidity", reading.getHumidityPercent());
+          context.put("light", reading.getLightPercent());
+          context.put("measuredAtUtc", reading.getTimestamp().toString());
+        }));
+    return json.writeValueAsString(context);
   }
 
   private void checkNode(String code, Long plantId) {
@@ -192,6 +211,19 @@ public class AgentService {
             p.getNodeId(),
             LockModeType.PESSIMISTIC_WRITE);
     checkNode(node.getNodeCode(), p.getPlantId());
+    var plant = plants.findById(p.getPlantId()).orElseThrow();
+    var latest = readings.findTopByNodeIdOrderByTimestampDesc(node.getId()).orElseThrow();
+    if ("WATER_PUMP".equals(p.getActuator())) {
+      if (plant.getHumidityThresholdMin() == null || latest.getHumidityPercent() == null)
+        throw new ResponseStatusException(CONFLICT, "WATERING_THRESHOLD_REQUIRED");
+      if (latest.getHumidityPercent() >= plant.getHumidityThresholdMin())
+        throw new ResponseStatusException(CONFLICT, "WATERING_NOT_NEEDED");
+    }
+    for (var active : proposals.findByNodeCodeAndCommandStatusIn(
+        node.getNodeCode(), List.of("QUEUED", "SENT", "ACKNOWLEDGED"))) {
+      if (active.getCommandExpiresAt().plusSeconds(active.getDurationSeconds() + 60L).isAfter(Instant.now()))
+        throw new ResponseStatusException(CONFLICT, "DEVICE_COMMAND_IN_PROGRESS");
+    }
     if (proposals.countByNodeIdAndConfirmedAtAfter(p.getNodeId(), Instant.now().minusSeconds(3600))
         >= 3) throw new ResponseStatusException(TOO_MANY_REQUESTS, "DEVICE_HOURLY_LIMIT");
     p.setStatus("CONFIRMED");

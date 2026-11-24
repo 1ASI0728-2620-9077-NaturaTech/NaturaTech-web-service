@@ -47,6 +47,6 @@ public class SensorReading {
     this.gasPercent = command.gasPercent();
     this.airTemperature = command.airTemperature();
     this.humidityPercent = command.humidityPercent();
-    this.timestamp = LocalDateTime.now();
+    this.timestamp = LocalDateTime.now(java.time.ZoneOffset.UTC);
   }
 }

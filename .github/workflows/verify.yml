@@ -20,6 +20,15 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s simulator -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - run: npm ci
+        working-directory: contracts
+      - run: npm run build && npm test
+        working-directory: contracts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

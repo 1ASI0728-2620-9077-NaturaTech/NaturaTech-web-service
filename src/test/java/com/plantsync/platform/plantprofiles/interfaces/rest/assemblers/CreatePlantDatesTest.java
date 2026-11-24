@@ -20,4 +20,11 @@ class CreatePlantDatesTest {
       assertEquals(400, error.getStatusCode().value());
     }
   }
+  @Test void serializesPlantWithoutOptionalWateringDate() {
+    var command = CreatePlantCommandFromResourceAssembler.toCommandFromResource(input("2026-11-11", null));
+    var plant = new com.plantsync.platform.plantprofiles.domain.model.aggregates.Plant(command);
+    var resource = PlantResourceFromEntityAssembler.toResourceFromEntity(plant);
+    assertNull(resource.nextWateringDate());
+    assertEquals("Pothos", resource.name());
+  }
 }

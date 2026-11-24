@@ -14,7 +14,7 @@ public class PlantResourceFromEntityAssembler {
         entity.getDescription(),
         entity.getAcquisitionDate().toString(),
         entity.getHumidity().name(),
-        entity.getNextWateringDate().toString(),
+        entity.getNextWateringDate() == null ? null : entity.getNextWateringDate().toString(),
         entity.getImageUrl(),
         entity.getNotificationsEnabled(),
         entity.getTemperatureThresholdMin(),

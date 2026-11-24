@@ -199,3 +199,10 @@ La arquitectura utiliza **Netlify para la web**, **Render para la API** y **Aive
 Tecnología para comprender y cuidar mejor cada planta.
 
 </div>
+
+
+## Cierre funcional en curso
+
+El seguimiento de brechas y criterios de aceptaci?n est? en [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+
+La ingesta `POST /api/v1/iot/edge/sensor-readings/batch` requiere las cabeceras `X-Edge-Api-Key` y `X-Node-Key`. Cada lote admite de 1 a 100 lecturas del mismo nodo, cuyo secreto debe corresponder al hash configurado en `IOT_NODE_KEY_HASHES`. El simulador Python ya env?a ambas cabeceras. Las lecturas nuevas se registran en UTC; los registros hist?ricos requieren revisar su zona de origen antes de convertirlos.

@@ -18,6 +18,12 @@ public class GeminiClient {
   private final String key;
   private final String model;
   private final HttpClient http;
+  private final Sleeper sleeper;
+
+  @FunctionalInterface
+  interface Sleeper {
+    void sleep(long millis) throws InterruptedException;
+  }
 
   @org.springframework.beans.factory.annotation.Autowired
   public GeminiClient(
@@ -28,10 +34,52 @@ public class GeminiClient {
   }
 
   GeminiClient(ObjectMapper json, String key, String model, HttpClient http) {
+    this(json, key, model, http, Thread::sleep);
+  }
+
+  GeminiClient(ObjectMapper json, String key, String model, HttpClient http, Sleeper sleeper) {
     this.http = http;
     this.json = json;
     this.key = key;
     this.model = model;
+    this.sleeper = sleeper;
+  }
+
+  private HttpResponse<String> sendWithRetry(HttpRequest request) throws Exception {
+    long deadline = System.nanoTime() + Duration.ofSeconds(45).toNanos();
+    for (int attempt = 0; attempt < 3; attempt++) {
+      HttpResponse<String> response;
+      try {
+        long remaining = deadline - System.nanoTime();
+        if (remaining <= 0) throw new java.net.http.HttpTimeoutException("Provider retry budget exhausted");
+        var bounded = HttpRequest.newBuilder(request, (name, value) -> true)
+            .timeout(Duration.ofNanos(remaining)).build();
+        response = http.send(bounded, HttpResponse.BodyHandlers.ofString());
+      } catch (java.io.IOException error) {
+        if (attempt == 2 || deadline - System.nanoTime() < Duration.ofSeconds(4).toNanos()) throw error;
+        sleeper.sleep((1000L << attempt) + java.util.concurrent.ThreadLocalRandom.current().nextInt(250));
+        continue;
+      }
+      if (attempt == 2 || !Set.of(429, 500, 502, 503, 504).contains(response.statusCode()))
+        return response;
+      long delay = (1000L << attempt) + java.util.concurrent.ThreadLocalRandom.current().nextInt(250);
+      var headers = response.headers();
+      var retryAfter = headers == null ? Optional.<String>empty() : headers.firstValue("Retry-After");
+      if (retryAfter.isPresent()) {
+        try {
+          long requested = Math.multiplyExact(Long.parseLong(retryAfter.get()), 1000);
+          // A synchronous request must not sleep past its bounded latency budget.
+          if (requested > 3000 || requested < 0) return response;
+          delay = Math.max(delay, requested);
+        } catch (NumberFormatException | ArithmeticException ignored) {
+          // HTTP-date or invalid values are not retried earlier than requested.
+          return response;
+        }
+      }
+      if (deadline - System.nanoTime() <= Duration.ofMillis(delay).toNanos()) return response;
+      sleeper.sleep(delay);
+    }
+    throw new IllegalStateException("Retry budget exhausted");
   }
 
   public boolean available() {
@@ -61,7 +109,7 @@ public class GeminiClient {
               .header("x-goog-api-key", key)
               .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
               .build();
-      var response = http.send(request, HttpResponse.BodyHandlers.ofString());
+      var response = sendWithRetry(request);
       if (response.statusCode() != 200) {
         // Return stable diagnostic codes, never the provider body or API key.
         String code = switch (response.statusCode()) {
