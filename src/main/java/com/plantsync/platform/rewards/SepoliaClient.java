@@ -79,14 +79,32 @@ public class SepoliaClient {
                   new Address(recipient),
                   new Bytes32(Hash.sha3(rewardId.getBytes(StandardCharsets.UTF_8)))),
               List.of());
+      String data = FunctionEncoder.encode(fn);
+      var estimate = web.ethEstimateGas(
+          org.web3j.protocol.core.methods.request.Transaction.createEthCallTransaction(
+              credentials.getAddress(), contract, data)).send();
+      if (estimate.hasError())
+        throw new ResponseStatusException(BAD_GATEWAY, "GAS_ESTIMATION_FAILED");
+      var amount = estimate.getAmountUsed();
+      if (amount == null || amount.signum() <= 0)
+        throw new ResponseStatusException(BAD_GATEWAY, "GAS_ESTIMATION_FAILED");
+      var gasLimit = amount.multiply(BigInteger.valueOf(120)).add(BigInteger.valueOf(99))
+          .divide(BigInteger.valueOf(100));
+      if (gasLimit.compareTo(BigInteger.valueOf(3_000_000)) > 0
+          || gasLimit.multiply(gasPrice).compareTo(new BigInteger("1000000000000000")) > 0)
+        throw new ResponseStatusException(SERVICE_UNAVAILABLE, "MINT_FEE_LIMIT");
+      var balance = web.ethGetBalance(credentials.getAddress(), DefaultBlockParameterName.PENDING)
+          .send().getBalance();
+      if (balance.compareTo(gasLimit.multiply(gasPrice)) < 0)
+        throw new ResponseStatusException(SERVICE_UNAVAILABLE, "MINTER_INSUFFICIENT_FUNDS");
       var tx =
           RawTransaction.createTransaction(
               nonce,
               gasPrice,
-              BigInteger.valueOf(300000),
+              gasLimit,
               contract,
               BigInteger.ZERO,
-              FunctionEncoder.encode(fn));
+              data);
       var bytes = TransactionEncoder.signMessage(tx, WalletService.CHAIN, credentials);
       return new Signed(Numeric.toHexString(bytes), Numeric.toHexString(Hash.sha3(bytes)));
     } finally {

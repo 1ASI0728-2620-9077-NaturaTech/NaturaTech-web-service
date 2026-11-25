@@ -47,6 +47,30 @@ class GeminiClientTest {
   }
 
   @Test
+  void imageRequestsRequireTheAnalysisSchema() throws Exception {
+    when(response.body()).thenReturn("{\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":\"{}\"}]}}]}");
+    client.generate("analysis", List.of(Map.of("inlineData", Map.of("mimeType", "image/png", "data", "fixture"))));
+    var capture = ArgumentCaptor.forClass(HttpRequest.class);
+    verify(http).send(capture.capture(), any());
+    var content = new java.io.ByteArrayOutputStream();
+    var done = new java.util.concurrent.CompletableFuture<String>();
+    capture.getValue().bodyPublisher().orElseThrow().subscribe(new java.util.concurrent.Flow.Subscriber<java.nio.ByteBuffer>() {
+      public void onSubscribe(java.util.concurrent.Flow.Subscription subscription) { subscription.request(Long.MAX_VALUE); }
+      public void onNext(java.nio.ByteBuffer buffer) {
+        byte[] bytes = new byte[buffer.remaining()]; buffer.get(bytes); content.writeBytes(bytes);
+      }
+      public void onError(Throwable error) { done.completeExceptionally(error); }
+      public void onComplete() { done.complete(content.toString(java.nio.charset.StandardCharsets.UTF_8)); }
+    });
+    var config = new ObjectMapper().readTree(done.get()).path("generationConfig");
+    var schema = config.path("responseSchema");
+    assertEquals(5, schema.path("required").size());
+    assertTrue(schema.path("properties").path("species").path("nullable").asBoolean());
+    assertEquals(3, schema.path("properties").path("observations").path("maxItems").asInt());
+    assertEquals("INCONCLUSIVE", schema.path("properties").path("status").path("enum").get(1).asText());
+  }
+
+  @Test
   void rejectsProviderErrorsWithoutLeakingResponse() {
     var cases = Map.of(401, "GEMINI_CREDENTIALS_REJECTED", 403, "GEMINI_CREDENTIALS_REJECTED",
         404, "GEMINI_MODEL_UNAVAILABLE", 429, "GEMINI_RATE_LIMITED",

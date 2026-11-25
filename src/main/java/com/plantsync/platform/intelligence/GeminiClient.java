@@ -90,6 +90,19 @@ public class GeminiClient {
     if (!available())
       throw new ResponseStatusException(SERVICE_UNAVAILABLE, "GEMINI_NOT_CONFIGURED");
     try {
+      var generation = new LinkedHashMap<String, Object>();
+      generation.put("responseMimeType", "application/json");
+      generation.put("maxOutputTokens", 2048);
+      if (parts.stream().anyMatch(part -> part.containsKey("inlineData"))) {
+        var text = Map.of("type", "STRING", "nullable", true);
+        var texts = Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "maxItems", 3);
+        generation.put("responseSchema", Map.of(
+            "type", "OBJECT",
+            "required", List.of("status", "species", "summary", "observations", "recommendations"),
+            "properties", Map.of(
+                "status", Map.of("type", "STRING", "enum", List.of("SUCCEEDED", "INCONCLUSIVE")),
+                "species", text, "summary", text, "observations", texts, "recommendations", texts)));
+      }
       var body =
           Map.of(
               "systemInstruction",
@@ -97,7 +110,7 @@ public class GeminiClient {
               "contents",
               List.of(Map.of("role", "user", "parts", parts)),
               "generationConfig",
-              Map.of("responseMimeType", "application/json", "maxOutputTokens", 2048));
+              generation);
       var request =
           HttpRequest.newBuilder(
                   URI.create(

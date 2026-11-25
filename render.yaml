@@ -20,7 +20,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-flash-latest
+        value: gemini-3.5-flash
       - key: WALLET_DOMAIN
         value: plantsync-app.netlify.app
       - key: IOT_ENVIRONMENT

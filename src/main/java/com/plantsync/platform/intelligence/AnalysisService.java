@@ -184,7 +184,11 @@ public class AnalysisService {
                           "image/png",
                           "data",
                           Base64.getEncoder().encodeToString(claimed.getImage())))));
-      validate(answer);
+      try {
+        validate(answer);
+      } catch (IllegalArgumentException invalidResult) {
+        throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY, "GEMINI_INVALID_RESULT");
+      }
       output = json.writeValueAsString(answer);
     } catch (ResponseStatusException e) {
       var safeCodes = Set.of("GEMINI_NOT_CONFIGURED", "GEMINI_CREDENTIALS_REJECTED",

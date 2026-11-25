@@ -42,10 +42,14 @@ class SepoliaClientTest {
             .getTransactionCount())
         .thenReturn(BigInteger.valueOf(7));
     when(web.ethGasPrice().send().getGasPrice()).thenReturn(BigInteger.valueOf(1000000000));
+    when(web.ethEstimateGas(any()).send().getAmountUsed()).thenReturn(BigInteger.valueOf(361607));
+    when(web.ethGetBalance(anyString(), eq(DefaultBlockParameterName.PENDING)).send().getBalance())
+        .thenReturn(new BigInteger("10000000000000000"));
     var signed = client.prepare(reward.getId(), recipient);
     var decoded = TransactionDecoder.decode(signed.raw());
     assertEquals(BigInteger.valueOf(7), decoded.getNonce());
     assertEquals(contract, decoded.getTo());
+    assertEquals(BigInteger.valueOf(433929), decoded.getGasLimit());
     assertEquals(
         Numeric.toHexString(Hash.sha3(Numeric.hexStringToByteArray(signed.raw()))), signed.hash());
     verify(web).shutdown();
@@ -60,6 +64,17 @@ class SepoliaClientTest {
         "BADGE_CONTRACT_MISSING",
         assertThrows(ResponseStatusException.class, () -> client.prepare("id", recipient))
             .getReason());
+  }
+
+  @Test
+  void refusesEstimatedFeeAboveOneThousandthOfTestEth() throws Exception {
+    when(web.ethGetCode(contract, DefaultBlockParameterName.LATEST).send().getCode()).thenReturn("0x6000");
+    when(web.ethGetTransactionCount(anyString(), eq(DefaultBlockParameterName.PENDING))
+        .send().getTransactionCount()).thenReturn(BigInteger.ONE);
+    when(web.ethGasPrice().send().getGasPrice()).thenReturn(BigInteger.valueOf(1_000_000_000));
+    when(web.ethEstimateGas(any()).send().getAmountUsed()).thenReturn(BigInteger.valueOf(1_000_000));
+    var error = assertThrows(ResponseStatusException.class, () -> client.prepare("id", recipient));
+    assertEquals("MINT_FEE_LIMIT", error.getReason());
   }
 
   @Test
