@@ -5,7 +5,6 @@ import com.plantsync.platform.plantprofiles.domain.model.valueobjects.HumidityLe
 import com.plantsync.platform.plantprofiles.domain.model.valueobjects.PlantName;
 import com.plantsync.platform.shared.domain.model.valueobjects.ProfileId;
 import com.plantsync.platform.plantprofiles.interfaces.rest.resources.UpdatePlantResource;
-import java.time.LocalDate;
 
 public class UpdatePlantCommandFromResourceAssembler {
 
@@ -16,9 +15,9 @@ public class UpdatePlantCommandFromResourceAssembler {
         new PlantName(resource.name()),
         resource.species(),
         resource.description(),
-        LocalDate.parse(resource.acquisitionDate()),
+        CreatePlantCommandFromResourceAssembler.parseDate(resource.acquisitionDate(), false),
         HumidityLevel.valueOf(resource.humidity().toUpperCase()),
-        LocalDate.parse(resource.nextWateringDate()),
+        CreatePlantCommandFromResourceAssembler.parseDate(resource.nextWateringDate(), true),
         resource.imageUrl(),
         resource.notificationsEnabled(),
         resource.temperatureThresholdMin(),

@@ -6,6 +6,22 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
 class CreatePlantDatesTest {
+  @Test void updateAcceptsMissingOptionalWateringDate() {
+    for (String date : new String[] {null, "", " "}) {
+      var input = new com.plantsync.platform.plantprofiles.interfaces.rest.resources.UpdatePlantResource(
+          "Pothos", "Epipremnum", "", "2026-11-11", "MEDIA", date, null, true,
+          null, null, null, null, null, 1L);
+      assertNull(UpdatePlantCommandFromResourceAssembler.toCommandFromResource(1L, input).nextWateringDate());
+    }
+  }
+  @Test void updateRejectsInvalidRequiredDateWith400() {
+    var input = new com.plantsync.platform.plantprofiles.interfaces.rest.resources.UpdatePlantResource(
+        "Pothos", "Epipremnum", "", "invalid", "MEDIA", null, null, true,
+        null, null, null, null, null, 1L);
+    var error = assertThrows(ResponseStatusException.class,
+        () -> UpdatePlantCommandFromResourceAssembler.toCommandFromResource(1L, input));
+    assertEquals(400, error.getStatusCode().value());
+  }
   private CreatePlantResource input(String arrival, String watering) {
     return new CreatePlantResource("Pothos", "Epipremnum", "", arrival, "MEDIA", watering,
         null, true, null, null, null, null, null, 1L);

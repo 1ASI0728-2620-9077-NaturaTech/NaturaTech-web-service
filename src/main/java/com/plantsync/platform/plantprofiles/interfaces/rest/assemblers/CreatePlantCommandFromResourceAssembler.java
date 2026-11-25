@@ -29,7 +29,7 @@ public class CreatePlantCommandFromResourceAssembler {
     );
   }
 
-  private static LocalDate parseDate(String value, boolean optional) {
+  static LocalDate parseDate(String value, boolean optional) {
     if (optional && (value == null || value.isBlank())) return null;
     try {
       return LocalDate.parse(value);
